@@ -1,0 +1,133 @@
+<div class="home-container">
+  <div class="content-wrapper">
+    <!-- Student Form Section -->
+    <section class="form-section">
+      <h2>Start a New Session</h2>
+      <form [formGroup]="studentForm" (ngSubmit)="onSubmit()" class="student-form">
+        <!-- Student Name (Optional) -->
+        <div class="form-group">
+          <label for="studentName">Student Name <span class="optional">(Optional)</span></label>
+          <input
+            id="studentName"
+            type="text"
+            formControlName="studentName"
+            placeholder="Enter your full name"
+            class="form-control"
+            [class.is-invalid]="isFieldInvalid('studentName')"
+          />
+          <span class="error-message" *ngIf="isFieldInvalid('studentName')">
+            <span *ngIf="studentForm.get('studentName')?.errors?.['minlength']">Student name must be at least 2 characters</span>
+          </span>
+        </div>
+
+        <!-- Registration Number -->
+        <div class="form-group">
+          <label for="registrationNumber">Registration Number *</label>
+          <input
+            id="registrationNumber"
+            type="text"
+            formControlName="registrationNumber"
+            placeholder="Enter your registration number"
+            class="form-control"
+            [class.is-invalid]="isFieldInvalid('registrationNumber')"
+          />
+          <span class="error-message" *ngIf="isFieldInvalid('registrationNumber')">
+            Registration number is required
+          </span>
+        </div>
+
+        <!-- Batch ID -->
+        <div class="form-group">
+          <label for="batchId">Batch ID *</label>
+          <input
+            id="batchId"
+            type="text"
+            formControlName="batchId"
+            placeholder="Enter your batch ID"
+            class="form-control"
+            [class.is-invalid]="isFieldInvalid('batchId')"
+          />
+          <span class="error-message" *ngIf="isFieldInvalid('batchId')">
+            Batch ID is required
+          </span>
+        </div>
+
+        <!-- Email ID (Optional) -->
+        <div class="form-group">
+          <label for="emailId">Email ID <span class="optional">(Optional)</span></label>
+          <input
+            id="emailId"
+            type="email"
+            formControlName="emailId"
+            placeholder="Enter your email address"
+            class="form-control"
+            [class.is-invalid]="isFieldInvalid('emailId')"
+          />
+          <span class="error-message" *ngIf="isFieldInvalid('emailId')">
+            <span *ngIf="studentForm.get('emailId')?.errors?.['email']">Please enter a valid email</span>
+          </span>
+        </div>
+
+        <!-- Mentor Selection -->
+        <div class="form-group">
+          <label for="mentorId">Choose Your Mentor *</label>
+          <select
+            id="mentorId"
+            formControlName="mentorId"
+            class="form-control"
+            [class.is-invalid]="isFieldInvalid('mentorId')"
+          >
+            <option value="">-- Select Mentor --</option>
+            <option *ngFor="let mentor of mentors$ | async" [value]="mentor.id">
+              {{ mentor.name }}
+            </option>
+          </select>
+          <span class="error-message" *ngIf="isFieldInvalid('mentorId')">
+            Please select a mentor
+          </span>
+        </div>
+
+        <!-- Submit Button -->
+        <button
+          type="submit"
+          class="btn btn-primary"
+          [disabled]="!studentForm.valid"
+        >
+          CONNECT WITH MENTOR
+        </button>
+      </form>
+    </section>
+
+    <!-- Recent Sessions Section -->
+    <section class="recent-sessions-section" *ngIf="(meetings$ | async)?.length">
+      <h2>Your Recent Sessions</h2>
+      <div class="sessions-list">
+        <div class="session-item" *ngFor="let meeting of meetings$ | async">
+          <div class="session-header">
+            <h3>{{ meeting.mentorName }}</h3>
+            <span class="session-date">{{ meeting.startTime | date: 'MMM d, y \'at\' h:mm a' }}</span>
+          </div>
+          <div class="session-meta">
+            <span class="duration">Duration: {{ formatDuration(meeting.duration) }}</span>
+          </div>
+          <div class="session-actions">
+            <button class="action-btn view-btn" [routerLink]="['/summary', meeting.id]">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+              </svg>
+              View Summary
+            </button>
+            <button class="action-btn reconnect-btn">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"></path>
+              </svg>
+              Reconnect
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+

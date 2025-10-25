@@ -1,0 +1,168 @@
+<div class="meeting-container">
+  <!-- Professional Header -->
+  <div class="meeting-header">
+    <div class="header-top">
+      <div class="header-left">
+        <div class="mentor-badge">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+            <circle cx="12" cy="7" r="4"></circle>
+          </svg>
+          <span>Mentor Session</span>
+        </div>
+        <h1>{{ mentorName }}</h1>
+      </div>
+      <div class="header-right">
+        <div class="time-display">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="12 6 12 12 16 14"></polyline>
+          </svg>
+          <span>{{ currentTime | date: 'short' }}</span>
+        </div>
+      </div>
+    </div>
+    <p class="meeting-subtitle">Audio-only feedback session</p>
+  </div>
+
+  <div class="meeting-content">
+    <!-- Backend Connection Status -->
+    <div class="backend-status" [class.error]="!backendConnected">
+      <span class="status-indicator" [class.connected]="backendConnected"></span>
+      <span class="status-text">
+        {{ backendConnected ? 'Backend Connected' : 'Backend Not Connected' }}
+      </span>
+      <span class="error-message" *ngIf="backendError">{{ backendError }}</span>
+    </div>
+
+    <!-- Recording Section -->
+    <div class="recording-section">
+      <!-- Status Indicator -->
+      <div class="status-indicator" [class.recording]="recordingState.isRecording">
+        <span class="status-dot"></span>
+        <span class="status-text">
+          {{ recordingState.isRecording ? 'Recording...' : 'Ready to Record' }}
+        </span>
+      </div>
+
+      <!-- Timer Display -->
+      <div class="timer">
+        {{ formatTime(recordingState.duration) }}
+      </div>
+
+      <!-- Waveform Visualization -->
+      <app-waveform
+        [audioLevel]="recordingState.audioLevel"
+      ></app-waveform>
+
+      <!-- Audio Preview Section - Only show when recording is stopped -->
+      <div class="audio-preview" *ngIf="hasRecording && isRecordingStopped && !recordingState.isRecording">
+        <div class="preview-header">
+          <h3>Recording Preview</h3>
+          <span class="duration-badge">{{ formatTime(recordingDuration) }}</span>
+        </div>
+        <div class="playback-controls">
+          <div class="button-group">
+            <button
+              class="play-btn"
+              (click)="playAudio()"
+              [disabled]="isPlaying || isProcessing"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+              </svg>
+              PLAY
+            </button>
+            <button
+              class="pause-btn"
+              (click)="pauseAudio()"
+              [disabled]="!isPlaying || isProcessing"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <rect x="6" y="4" width="4" height="16"></rect>
+                <rect x="14" y="4" width="4" height="16"></rect>
+              </svg>
+              PAUSE
+            </button>
+            <button
+              class="stop-btn"
+              (click)="stopAudio()"
+              [disabled]="!isPlaying || isProcessing"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <rect x="6" y="6" width="12" height="12"></rect>
+              </svg>
+              STOP
+            </button>
+          </div>
+          <div class="playback-progress">
+            <span class="current-time">{{ formatTime(currentPlayTime) }}</span>
+            <div class="progress-bar">
+              <div class="progress-fill" [style.width.%]="recordingDuration > 0 ? (currentPlayTime / recordingDuration) * 100 : 0"></div>
+            </div>
+            <span class="total-time">{{ formatTime(recordingDuration) }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Control Buttons -->
+      <div class="controls">
+        <!-- Recording Phase Buttons -->
+        <button
+          class="btn btn-primary"
+          (click)="startRecording()"
+          [disabled]="recordingState.isRecording || isProcessing || isRecordingStopped"
+        >
+          START RECORDING
+        </button>
+        <button
+          class="btn btn-danger"
+          (click)="stopRecording()"
+          [disabled]="!recordingState.isRecording || isProcessing"
+        >
+          STOP RECORDING
+        </button>
+        <button
+          class="btn btn-success"
+          (click)="endMeeting()"
+          [disabled]="!hasRecording || isProcessing || recordingState.isRecording || !isRecordingStopped"
+        >
+          {{ isProcessing ? 'Processing...' : 'END MEETING' }}
+        </button>
+      </div>
+
+      <!-- Error Message -->
+      <div class="error-message" *ngIf="endMeetingError">
+        <p>{{ endMeetingError }}</p>
+      </div>
+
+      <!-- Processing Message -->
+      <div class="processing-message" *ngIf="isProcessing">
+        <div class="spinner"></div>
+        <p>Processing your meeting... This may take a moment.</p>
+      </div>
+    </div>
+
+    <!-- Info Section -->
+    <div class="info-section">
+      <h3>Meeting Information</h3>
+      <div class="info-item">
+        <span class="label">Mentor:</span>
+        <span class="value">{{ mentorName }}</span>
+      </div>
+      <div class="info-item">
+        <span class="label">Status:</span>
+        <span class="value">{{ recordingState.isRecording ? 'Recording' : 'Idle' }}</span>
+      </div>
+      <div class="info-item">
+        <span class="label">Duration:</span>
+        <span class="value">{{ formatTime(recordingState.duration) }}</span>
+      </div>
+      <div class="info-item" *ngIf="studentName">
+        <span class="label">Student:</span>
+        <span class="value">{{ studentName }}</span>
+      </div>
+    </div>
+  </div>
+</div>
+
