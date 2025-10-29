@@ -1,14 +1,19 @@
-import { Component, OnInit, OnDestroy, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
+import { MatDialog } from '@angular/material/dialog';
 import { AudioRecorderService, RecordingState } from '../../core/services/audio-recorder.service';
 import { MeetingService } from '../../core/services/meeting.service';
 import { MentorService } from '../../core/services/mentor.service';
 import { BackendService } from '../../core/services/backend.service';
+import { MockApiService } from '../../core/services/mock-api.service';
 import { Meeting } from '../../models/meeting.model';
 import { WaveformComponent } from '../../shared/waveform/waveform.component';
+import { StopRecordingDialogComponent } from '../../shared/stop-recording-dialog/stop-recording-dialog.component';
+import { ResponsePreviewDialogComponent } from '../../shared/response-preview-dialog/response-preview-dialog.component';
+import { AudioPreviewDialogComponent } from '../../shared/audio-preview-dialog/audio-preview-dialog.component';
 
 @Component({
   selector: 'app-meeting',
@@ -32,11 +37,7 @@ export class MeetingComponent implements OnInit, OnDestroy {
   currentMeeting: Meeting | null = null;
 
   // Audio preview properties
-  audioUrl: string = '';
-  isPlaying: boolean = false;
-  audioPlayer: HTMLAudioElement | null = null;
   recordingDuration: number = 0;
-  currentPlayTime: number = 0;
   isRecordingStopped: boolean = false;
   backendConnected: boolean = false;
   backendError: string | null = null;
@@ -45,7 +46,6 @@ export class MeetingComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
   private mentorId: string = '';
   private timerInterval: any;
-  private playbackInterval: any;
 
   constructor(
     private route: ActivatedRoute,
@@ -53,7 +53,10 @@ export class MeetingComponent implements OnInit, OnDestroy {
     private audioRecorder: AudioRecorderService,
     private meetingService: MeetingService,
     private mentorService: MentorService,
-    private backendService: BackendService
+    private backendService: BackendService,
+    private mockApiService: MockApiService,
+    private dialog: MatDialog,
+    private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit(): void {
@@ -62,12 +65,14 @@ export class MeetingComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe(connected => {
         this.backendConnected = connected;
+        this.cdr.markForCheck();
       });
 
     this.backendService.getConnectionError()
       .pipe(takeUntil(this.destroy$))
       .subscribe(error => {
         this.backendError = error;
+        this.cdr.markForCheck();
       });
 
     // Get mentor ID from route params
@@ -108,6 +113,7 @@ export class MeetingComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe(state => {
         this.recordingState = state;
+        this.cdr.markForCheck();
       });
 
     // Subscribe to audio data changes
@@ -115,22 +121,13 @@ export class MeetingComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe(blob => {
         this.hasRecording = blob !== null;
+        this.cdr.markForCheck();
       });
   }
 
   ngOnDestroy(): void {
     if (this.timerInterval) {
       clearInterval(this.timerInterval);
-    }
-    if (this.playbackInterval) {
-      clearInterval(this.playbackInterval);
-    }
-    if (this.audioPlayer) {
-      this.audioPlayer.pause();
-      this.audioPlayer = null;
-    }
-    if (this.audioUrl) {
-      URL.revokeObjectURL(this.audioUrl);
     }
     this.destroy$.next();
     this.destroy$.complete();
@@ -151,22 +148,8 @@ export class MeetingComponent implements OnInit, OnDestroy {
     this.hasRecording = false;
     this.isProcessing = false;
     this.isRecordingStopped = false;
-    this.audioUrl = '';
-    this.isPlaying = false;
     this.recordingDuration = 0;
-    this.currentPlayTime = 0;
     this.endMeetingError = null;
-
-    // Stop any playing audio
-    if (this.audioPlayer) {
-      this.audioPlayer.pause();
-      this.audioPlayer = null;
-    }
-
-    // Revoke audio URL
-    if (this.audioUrl) {
-      URL.revokeObjectURL(this.audioUrl);
-    }
 
     // Reset audio recorder
     this.audioRecorder.resetRecording();
@@ -188,10 +171,55 @@ export class MeetingComponent implements OnInit, OnDestroy {
    * Stop audio recording
    */
   stopRecording(): void {
-    this.audioRecorder.stopRecording();
+    this.audioRecorder.pauseRecording();
     // Capture the recording duration when stopping
     this.recordingDuration = this.recordingState.duration;
     this.isRecordingStopped = true;
+    this.cdr.markForCheck();
+
+    // Show stop recording dialog
+    const dialogRef = this.dialog.open(StopRecordingDialogComponent, {
+      width: '500px',
+      disableClose: true,
+      data: {
+        recordingDuration: this.recordingDuration
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result === 'resume') {
+        this.isRecordingStopped = false;
+        this.cdr.markForCheck();
+        this.resumeRecording();
+      } else if (result === 'preview') {
+        this.showAudioPreview();
+      }
+    });
+  }
+
+  /**
+   * Show audio preview in a dialog
+   */
+  private showAudioPreview(): void {
+    this.audioRecorder.getAudioData()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(blob => {
+        if (blob) {
+          const previewDialogRef = this.dialog.open(AudioPreviewDialogComponent, {
+            width: '600px',
+            disableClose: false,
+            data: {
+              audioBlob: blob,
+              recordingDuration: this.recordingDuration
+            }
+          });
+
+          previewDialogRef.afterClosed().subscribe(() => {
+            // Dialog closed, user can now resume or end meeting
+            this.cdr.markForCheck();
+          });
+        }
+      });
   }
 
   /**
@@ -207,125 +235,45 @@ export class MeetingComponent implements OnInit, OnDestroy {
     }
   }
 
-  /**
-   * Play recorded audio for preview
-   */
-  playAudio(): void {
-    if (!this.audioPlayer) {
-      this.audioRecorder.getAudioData()
-        .pipe(takeUntil(this.destroy$))
-        .subscribe(blob => {
-          if (blob) {
-            this.audioUrl = URL.createObjectURL(blob);
-            this.audioPlayer = new Audio(this.audioUrl);
-            this.audioPlayer.play();
-            this.isPlaying = true;
-            this.startPlaybackTracking();
-          }
-        });
-    } else {
-      this.audioPlayer.play();
-      this.isPlaying = true;
-      this.startPlaybackTracking();
-    }
-  }
 
-  /**
-   * Pause audio playback
-   */
-  pauseAudio(): void {
-    if (this.audioPlayer) {
-      this.audioPlayer.pause();
-      this.isPlaying = false;
-      this.stopPlaybackTracking();
-    }
-  }
-
-  /**
-   * Stop audio playback and reset
-   */
-  stopAudio(): void {
-    if (this.audioPlayer) {
-      this.audioPlayer.pause();
-      this.audioPlayer.currentTime = 0;
-      this.isPlaying = false;
-      this.currentPlayTime = 0;
-      this.stopPlaybackTracking();
-    }
-  }
-
-  /**
-   * Track audio playback progress
-   */
-  private startPlaybackTracking(): void {
-    this.playbackInterval = setInterval(() => {
-      if (this.audioPlayer) {
-        this.currentPlayTime = Math.floor(this.audioPlayer.currentTime);
-        if (this.audioPlayer.ended) {
-          this.isPlaying = false;
-          this.stopPlaybackTracking();
-        }
-      }
-    }, 100);
-  }
-
-  /**
-   * Stop tracking audio playback
-   */
-  private stopPlaybackTracking(): void {
-    if (this.playbackInterval) {
-      clearInterval(this.playbackInterval);
-      this.playbackInterval = null;
-    }
-  }
 
   /**
    * End meeting and process audio
-   * Sends audio to backend for transcription and summarization
+   * Sends audio to backend API using FormData
    */
   endMeeting(): void {
     if (!this.currentMeeting) return;
 
-    // Check if backend is connected
-    if (!this.backendConnected) {
-      this.endMeetingError = 'Backend service not added';
-      return;
+    // Stop recording if still recording
+    if (this.recordingState.isRecording) {
+      this.audioRecorder.pauseRecording();
     }
 
     this.isProcessing = true;
     this.endMeetingError = null;
+    this.recordingDuration = this.recordingState.duration;
+    this.cdr.markForCheck();
+
     this.audioRecorder.getAudioData()
       .pipe(takeUntil(this.destroy$))
       .subscribe(audioBlob => {
         if (audioBlob && this.currentMeeting) {
-          // Save meeting immediately with placeholder data
-          this.meetingService.saveMeeting(
-            this.currentMeeting,
-            'Processing transcript...',
-            'Processing summary...'
-          );
-
-          // Send audio to backend
+          // Send audio to backend API with FormData
           this.uploadAudioToBackend(audioBlob, this.currentMeeting);
         } else {
           this.isProcessing = false;
           this.endMeetingError = 'No audio recording found. Please record audio before ending the meeting.';
+          this.cdr.markForCheck();
         }
       });
   }
 
   /**
-   * Upload audio file to backend
+   * Upload audio file to backend API using FormData
    * @param audioBlob - The audio blob to upload
    * @param meeting - The meeting object
    */
   private uploadAudioToBackend(audioBlob: Blob, meeting: Meeting): void {
-    if (!this.backendConnected) {
-      this.isProcessing = false;
-      alert('Backend service not connected. Please check your connection and try again.');
-      return;
-    }
-
     const meetingData = {
       meetingId: meeting.id,
       mentorId: meeting.mentorId,
@@ -335,27 +283,42 @@ export class MeetingComponent implements OnInit, OnDestroy {
       startTime: meeting.startTime
     };
 
-    console.log('Uploading audio to backend:', meetingData);
+    console.log('Uploading audio to backend API with FormData:', meetingData);
 
-    // Call backend service to upload audio
-    this.backendService.uploadAudio(audioBlob, meetingData)
+    // Call mock API service to upload audio with FormData
+    // TODO: This will be replaced with real backend API call
+    this.mockApiService.uploadMeetingData(audioBlob, meetingData)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (response) => {
-          console.log('Backend response:', response);
-          // Update the meeting with actual transcript and summary from backend
-          this.meetingService.updateMeeting(
-            meeting.id,
-            response.transcript,
-            response.summary
-          );
+          console.log('Backend API response:', response);
           this.isProcessing = false;
-          this.router.navigate(['/summary', meeting.id]);
+          this.cdr.markForCheck();
+
+          // Save meeting with response data
+          this.meetingService.saveMeeting(
+            meeting,
+            response.responseSummary.transcript,
+            `Meeting with ${response.responseSummary.mentorName} - ${response.responseSummary.meetingDuration}`
+          );
+
+          // Show response preview dialog
+          const dialogRef = this.dialog.open(ResponsePreviewDialogComponent, {
+            width: '600px',
+            disableClose: true,
+            data: response.responseSummary
+          });
+
+          dialogRef.afterClosed().subscribe(() => {
+            // Navigate back to home after closing dialog
+            this.router.navigate(['/']);
+          });
         },
         error: (error) => {
-          console.error('Backend upload error:', error);
+          console.error('Backend API upload error:', error);
           this.isProcessing = false;
-          alert(`Failed to process meeting: ${error.message}`);
+          this.endMeetingError = `Failed to process meeting: ${error.message}`;
+          this.cdr.markForCheck();
         }
       });
   }
@@ -367,6 +330,7 @@ export class MeetingComponent implements OnInit, OnDestroy {
   private startTimer(): void {
     this.timerInterval = setInterval(() => {
       this.currentTime = new Date();
+      this.cdr.markForCheck();
     }, 1000);
   }
 

@@ -20,6 +20,7 @@ export class AudioRecorderService {
   });
   private audioDataSubject$ = new BehaviorSubject<Blob | null>(null);
   private startTime: number = 0;
+  private pausedTime: number = 0;  // Track total paused duration
   private timerInterval: any = null;
   private audioContext: AudioContext | null = null;
   private analyser: AnalyserNode | null = null;
@@ -39,10 +40,14 @@ export class AudioRecorderService {
     try {
       // If already recording, just resume
       if (this.mediaRecorder && this.mediaRecorder.state === 'paused') {
+        // Adjust startTime to account for pause duration
+        const currentDuration = this.recordingState$.value.duration;
+        this.startTime = Date.now() - (currentDuration * 1000);
+
         this.mediaRecorder.resume();
         this.recordingState$.next({
           isRecording: true,
-          duration: this.recordingState$.value.duration,
+          duration: currentDuration,
           audioLevel: 0
         });
         this.startTimer();
@@ -61,6 +66,7 @@ export class AudioRecorderService {
       this.mediaRecorder = new MediaRecorder(stream);
       this.audioChunks = [];
       this.startTime = Date.now();
+      this.pausedTime = 0;  // Reset paused time for new recording
 
       this.mediaRecorder.ondataavailable = (event) => {
         this.audioChunks.push(event.data);
