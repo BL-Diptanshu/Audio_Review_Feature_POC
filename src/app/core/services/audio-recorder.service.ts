@@ -95,6 +95,8 @@ export class AudioRecorderService {
 
   pauseRecording(): void {
     if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+      // Request data before pausing to ensure ondataavailable is called
+      this.mediaRecorder.requestData();
       this.mediaRecorder.pause();
       this.recordingState$.next({
         isRecording: false,
@@ -108,6 +110,8 @@ export class AudioRecorderService {
 
   stopRecording(): void {
     if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+      // Request data before stopping to ensure ondataavailable is called
+      this.mediaRecorder.requestData();
       this.mediaRecorder.stop();
       this.recordingState$.next({
         isRecording: false,
@@ -162,6 +166,17 @@ export class AudioRecorderService {
       cancelAnimationFrame(this.animationFrameId);
       this.animationFrameId = null;
     }
+  }
+
+  /**
+   * Get current audio blob from recorded chunks
+   * This is used for preview before ending meeting
+   */
+  getCurrentAudioBlob(): Blob | null {
+    if (this.audioChunks.length === 0) {
+      return null;
+    }
+    return new Blob(this.audioChunks, { type: 'audio/wav' });
   }
 
   resetRecording(): void {

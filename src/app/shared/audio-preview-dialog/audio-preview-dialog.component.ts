@@ -1,4 +1,4 @@
-import { Component, Inject, OnInit, OnDestroy } from '@angular/core';
+import { Component, Inject, OnInit, OnDestroy, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -12,6 +12,7 @@ export interface AudioPreviewDialogData {
   selector: 'app-audio-preview-dialog',
   standalone: true,
   imports: [CommonModule, MatDialogModule, MatButtonModule],
+  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="audio-preview-dialog">
       <div class="dialog-header">
@@ -297,7 +298,8 @@ export class AudioPreviewDialogComponent implements OnInit, OnDestroy {
 
   constructor(
     public dialogRef: MatDialogRef<AudioPreviewDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: AudioPreviewDialogData
+    @Inject(MAT_DIALOG_DATA) public data: AudioPreviewDialogData,
+    private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit(): void {
@@ -320,6 +322,7 @@ export class AudioPreviewDialogComponent implements OnInit, OnDestroy {
     if (this.audioPlayer) {
       this.audioPlayer.play();
       this.isPlaying = true;
+      this.cdr.markForCheck();
       this.startPlaybackTracking();
     }
   }
@@ -328,6 +331,7 @@ export class AudioPreviewDialogComponent implements OnInit, OnDestroy {
     if (this.audioPlayer) {
       this.audioPlayer.pause();
       this.isPlaying = false;
+      this.cdr.markForCheck();
       this.stopPlaybackTracking();
     }
   }
@@ -338,6 +342,7 @@ export class AudioPreviewDialogComponent implements OnInit, OnDestroy {
       this.audioPlayer.currentTime = 0;
       this.isPlaying = false;
       this.currentPlayTime = 0;
+      this.cdr.markForCheck();
       this.stopPlaybackTracking();
     }
   }
@@ -346,8 +351,10 @@ export class AudioPreviewDialogComponent implements OnInit, OnDestroy {
     this.playbackInterval = setInterval(() => {
       if (this.audioPlayer) {
         this.currentPlayTime = Math.floor(this.audioPlayer.currentTime);
+        this.cdr.markForCheck();
         if (this.audioPlayer.ended) {
           this.isPlaying = false;
+          this.cdr.markForCheck();
           this.stopPlaybackTracking();
         }
       }

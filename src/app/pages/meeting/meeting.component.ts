@@ -201,25 +201,26 @@ export class MeetingComponent implements OnInit, OnDestroy {
    * Show audio preview in a dialog
    */
   private showAudioPreview(): void {
-    this.audioRecorder.getAudioData()
-      .pipe(takeUntil(this.destroy$))
-      .subscribe(blob => {
-        if (blob) {
-          const previewDialogRef = this.dialog.open(AudioPreviewDialogComponent, {
-            width: '600px',
-            disableClose: false,
-            data: {
-              audioBlob: blob,
-              recordingDuration: this.recordingDuration
-            }
-          });
+    // Get the current audio blob from the recorder
+    const audioBlob = this.audioRecorder.getCurrentAudioBlob();
 
-          previewDialogRef.afterClosed().subscribe(() => {
-            // Dialog closed, user can now resume or end meeting
-            this.cdr.markForCheck();
-          });
+    if (audioBlob && audioBlob.size > 0) {
+      const previewDialogRef = this.dialog.open(AudioPreviewDialogComponent, {
+        width: '600px',
+        disableClose: false,
+        data: {
+          audioBlob: audioBlob,
+          recordingDuration: this.recordingDuration
         }
       });
+
+      previewDialogRef.afterClosed().subscribe(() => {
+        // Dialog closed, user can now resume or end meeting
+        this.cdr.markForCheck();
+      });
+    } else {
+      alert('No audio recording found. Please record audio before previewing.');
+    }
   }
 
   /**
@@ -254,18 +255,17 @@ export class MeetingComponent implements OnInit, OnDestroy {
     this.recordingDuration = this.recordingState.duration;
     this.cdr.markForCheck();
 
-    this.audioRecorder.getAudioData()
-      .pipe(takeUntil(this.destroy$))
-      .subscribe(audioBlob => {
-        if (audioBlob && this.currentMeeting) {
-          // Send audio to backend API with FormData
-          this.uploadAudioToBackend(audioBlob, this.currentMeeting);
-        } else {
-          this.isProcessing = false;
-          this.endMeetingError = 'No audio recording found. Please record audio before ending the meeting.';
-          this.cdr.markForCheck();
-        }
-      });
+    // Get current audio blob from recorded chunks
+    const audioBlob = this.audioRecorder.getCurrentAudioBlob();
+
+    if (audioBlob && audioBlob.size > 0 && this.currentMeeting) {
+      // Send audio to backend API with FormData
+      this.uploadAudioToBackend(audioBlob, this.currentMeeting);
+    } else {
+      this.isProcessing = false;
+      this.endMeetingError = 'No audio recording found. Please record audio before ending the meeting.';
+      this.cdr.markForCheck();
+    }
   }
 
   /**
